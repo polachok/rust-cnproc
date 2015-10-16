@@ -6,53 +6,19 @@ extern crate libc;
 extern crate nix;
 
 pub mod connector;
+pub mod socket;
 
-use libc::funcs::bsd43::{socket,bind,send,recvfrom};
+use socket::{NetlinkSocket,NetlinkProtocol};
 use byteorder::{LittleEndian, WriteBytesExt};
 use std::os::unix::io::RawFd;
 use nix::Error;
 use nix::errno;
 
 mod ffi {
-	use libc::{c_int, sa_family_t, c_short};
-	pub const PF_NETLINK: c_int = 16;
-	pub const SOCK_DGRAM: c_int = 2;
-
-	pub const NETLINK_ROUTE: c_int = 0;
-	pub const NETLINK_UNUSED: c_int = 1;
-	pub const NETLINK_USERSOCK: c_int = 2;
-	pub const NETLINK_FIREWALL: c_int = 3;
-	pub const NETLINK_INET_DIAG: c_int = 4;
-	pub const NETLINK_NFLOG: c_int = 5;
-	pub const NETLINK_XFRM: c_int = 6;
-	pub const NETLINK_SELINUX: c_int = 7;
-	pub const NETLINK_ISCSI: c_int = 8;
-	pub const NETLINK_AUDIT: c_int = 9;
-	pub const NETLINK_FIB_LOOKUP: c_int = 10;
-	pub const NETLINK_CONNECTOR: c_int = 11;
-	pub const NETLINK_NETFILTER: c_int = 12;
-	pub const NETLINK_IP6_FW: c_int = 13;
-	pub const NETLINK_DNRTMSG: c_int = 14;
-	pub const NETLINK_KOBJECT_UEVENT: c_int = 15;
-	pub const NETLINK_GENERIC: c_int = 16;
-	pub const NETLINK_SCSITRANSPORT: c_int = 18;
-	pub const NETLINK_ECRYPTFS: c_int = 19;
-	pub const NETLINK_RDMA: c_int = 20;
-	pub const NETLINK_CRYPTO: c_int = 21;
-
-	pub const NLMSG_NOOP: c_int  = 0x1;     /* Nothing.             */
-	pub const NLMSG_ERROR: c_int = 0x2;     /* Error                */
-	pub const NLMSG_DONE: c_int  = 0x3;     /* End of a dump        */
-	pub const NLMSG_OVERRUN: c_int = 0x4;     /* Data lost            */
-
-	#[repr(C)]
-	#[derive(Copy,Clone)]
-	pub struct sockaddr_nl {
-		pub nl_family: sa_family_t,
-		pub nl_pad: c_short,
-		pub nl_pid: u32,
-		pub nl_groups: u32
-	}
+	pub const NLMSG_NOOP: u16  = 0x1;     /* Nothing.             */
+	pub const NLMSG_ERROR: u16 = 0x2;     /* Error                */
+	pub const NLMSG_DONE: u16  = 0x3;     /* End of a dump        */
+	pub const NLMSG_OVERRUN: u16 = 0x4;     /* Data lost            */
 
 	#[repr(C)]
 	#[derive(Copy,Clone,Debug)]
@@ -69,6 +35,67 @@ mod ffi {
 pub struct NetlinkRequest {
 	header: ffi::nlmsghdr,
 	data: Vec<u8>
+}
+
+#[derive(Debug)]
+pub struct NetlinkMessage {
+	buffer: Vec<u8>
+}
+
+impl NetlinkMessage {
+	pub fn as_bytes(&self) -> &[u8] {
+		&self.buffer
+	}
+}
+
+#[derive(Debug)]
+pub struct NetlinkMessageBuilder<'a> {
+	buffer: Vec<u8>,
+	header: &'a mut ffi::nlmsghdr,
+	cursor: *mut u8,
+}
+
+impl<'a> NetlinkMessageBuilder<'a> {
+	pub fn new() -> NetlinkMessageBuilder<'a> {
+		use std::mem;
+		use std::mem::size_of;
+		use libc::getpid;
+		let data_offset: usize = 2; /* 16 bytes of padding for alignment */
+
+		let mut buf: Vec<u8> = Vec::with_capacity(size_of::<ffi::nlmsghdr>() + data_offset);
+		let p = buf.as_mut_ptr();
+		let h: &mut ffi::nlmsghdr = unsafe { mem::transmute(p) };
+		/* initialize header with sane values */
+		h.nlmsg_len = size_of::<ffi::nlmsghdr>() as u32;
+		h.nlmsg_type = ffi::NLMSG_DONE;
+		h.nlmsg_flags = 0;
+		h.nlmsg_seq = 0;
+		h.nlmsg_pid = unsafe { getpid() } as u32;
+		let c = unsafe { p.offset(size_of::<ffi::nlmsghdr>() as isize + data_offset as isize) } as *mut u8;
+		unsafe { buf.set_len(size_of::<ffi::nlmsghdr>() + data_offset) }; 
+		
+		NetlinkMessageBuilder { buffer: buf, header: h, cursor: c }
+	}
+
+	pub fn with_type(mut self, t: u16) -> Self {
+		self.header.nlmsg_type = t;
+		self
+	}
+
+	pub fn with_data<T: Sized>(mut self, f: &Fn(&mut T) -> ()) -> Self {
+		use std::mem;
+		unsafe { self.buffer.reserve(mem::size_of::<T>() as usize) };
+		let res = unsafe { mem::transmute::<_,&mut T>(self.cursor) };
+		f(res);
+		self.cursor = unsafe { self.cursor.offset(mem::size_of::<T>() as isize) };
+		self.header.nlmsg_len += mem::size_of::<T>() as u32;
+		unsafe { self.buffer.set_len(self.header.nlmsg_len as usize) };
+		self
+	}
+
+	pub fn get_message(self) -> NetlinkMessage {
+		NetlinkMessage { buffer: self.buffer }
+	}
 }
 
 impl NetlinkRequest {
@@ -135,87 +162,23 @@ impl NetlinkRequest {
 	}
 }
 
-pub struct NetlinkSocket {
-	fd: RawFd,
-}
-
-impl NetlinkSocket {
-	fn new() -> Result<NetlinkSocket,Error> {
-		unsafe {
-			let res = socket(ffi::PF_NETLINK, ffi::SOCK_DGRAM, ffi::NETLINK_CONNECTOR);
-			if res < 0 {
-				return Err(Error::Sys(errno::Errno::last()));
-			}
-			Ok(NetlinkSocket { fd: res })
-		}
-	}
-
-	fn bind(&self) -> Result<(),Error> {
-		use std::mem::size_of;
-		use std::mem::transmute;
-		use libc::getpid;
-
-		let mut sockaddr = ffi::sockaddr_nl {
-			nl_family: ffi::PF_NETLINK as u16,
-			nl_pad: 0,
-			nl_pid: unsafe { getpid() } as u32,
-			nl_groups: connector::CN_IDX_PROC as u32,
-		};
-		unsafe {
-			let res = bind(self.fd, transmute(&mut sockaddr), size_of::<ffi::sockaddr_nl>() as u32);
-			if res < 0 {
-				return Err(Error::Sys(errno::Errno::last()));
-			}
-			Ok(())
-		}
-	}
-
-	fn start(&self) -> Result<(),Error> {
-		use libc::c_void;
-
-		let listenmsg = connector::ConnectorMsg::listen();
-		let req = NetlinkRequest::with_data(listenmsg);
-		let data = req.as_bytes();
-		unsafe {
-			let len = data.len();
-			let res = send(self.fd, data.as_ptr() as *const c_void, len as u64, 0);
-			if res != len as i64 {
-				return Err(Error::Sys(errno::Errno::last()));
-			}
-			Ok(())
-		}
-	}
-
-	fn receive(&self, buf: &mut [u8]) -> Result<i64,Error> {
-		use libc::c_void;
-		use std::ptr::null_mut;
-		use libc::types::os::common::bsd44::sockaddr;
-
-		unsafe {
-			let res = recvfrom(self.fd, buf.as_mut_ptr() as *mut c_void, 101, 0, null_mut::<sockaddr>(), null_mut::<u32>());
-			if res < 0 as i64 {
-				return Err(Error::Sys(errno::Errno::last()));
-			}
-			Ok(res)
-		}
-	}
-}
-
 #[test]
 fn it_works() {
-	let sock = NetlinkSocket::new().unwrap();
+	let sock = NetlinkSocket::bind(NetlinkProtocol::Connector, connector::CN_IDX_PROC as u32).unwrap();
+	let msg = NetlinkMessageBuilder::new()
+		.with_data::<connector::cnprocmsg>(&|cmsg| cmsg.listen())
+		.get_message();
+	let data = msg.as_bytes();
+	sock.send(data);
 
-	sock.bind().unwrap();
-	sock.start().unwrap();
 	let mut i: usize = 100;
 	loop {
-		let mut buf: Vec<u8> = Vec::with_capacity(100);
-		let len = sock.receive(&mut buf).unwrap();
-		unsafe { buf.set_len(len as usize) };
-		//println!("BUF LEN {} RECEIVED: {:?}", buf.len(), buf);
+		let mut buf = [0;100];
+		let len = sock.recv(&mut buf).unwrap();
+		println!("BUF LEN {} RECEIVED", len);
 		let reply = NetlinkRequest::from_bytes(&buf);
-		//println!("REPLY: {:?}", reply);
-		assert!(reply.header.nlmsg_pid == 0);
+		println!("REPLY: {:?}", reply);
+		//assert!(reply.header.nlmsg_pid == 0);
 		let msg = connector::ConnectorMsg::from_bytes(&reply.data);
 		//println!("MSG: {:?}", msg);
 		let ev = connector::ProcEvent::from_bytes(&msg.data);

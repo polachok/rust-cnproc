@@ -34,6 +34,36 @@ pub const PROC_EVENT_COMM: u32 = 0x00000200;
 pub const PROC_EVENT_EXIT: u32 = 0x80000000;
 
 #[derive(Debug)]
+#[repr(C)]
+pub struct cnmsg {
+	idx: u32,
+	val: u32,
+	seq: u32,
+	ack: u32,
+	len: u16,
+	flags: u16,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct cnprocmsg {
+	header: cnmsg,
+	op: u32,
+}
+
+impl cnprocmsg {
+	pub fn listen(&mut self) {
+		self.header.idx = CN_IDX_PROC as u32;
+		self.header.val = CN_VAL_PROC as u32;
+		self.header.seq = 0;
+		self.header.ack = 0;
+		self.header.len = 4;
+		self.header.flags = 0;
+		self.op = PROC_CN_MCAST_LISTEN as u32;
+	}
+}
+
+#[derive(Debug)]
 pub struct ConnectorMsg {
 	idx: u32,
 	val: u32,
