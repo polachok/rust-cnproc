@@ -76,6 +76,7 @@ impl<T> NetlinkMessage<T> {
 
 #[test]
 fn really() {
+	use connector::EventTypes;
 	let sock = NetlinkSocket::bind(NetlinkProtocol::Connector, connector::CN_IDX_PROC as u32).unwrap();
 	let msg = NetlinkMessage::new(connector::cnprocmsg::listen());
 	let data = msg.as_bytes();
@@ -87,14 +88,19 @@ fn really() {
 		let len = sock.recv(&mut buf).unwrap();
 		println!("BUF LEN {} RECEIVED", len);
 		let reply: &NetlinkMessage<connector::cnprocmsg<connector::proc_event>> = NetlinkMessage::from_bytes(&buf);
-		println!("REPLY: {:?}", reply);
-		/*
-		//assert!(reply.header.nlmsg_pid == 0);
-		let msg = connector::ConnectorMsg::from_bytes(&reply.data);
-		//println!("MSG: {:?}", msg);
-		let ev = connector::ProcEvent::from_bytes(&msg.data);
-		println!("EVENT: {:?}", ev);
-		*/
+		//println!("REPLY: {:?}", reply);
+		let ref msg = reply.data;
+		let ref ev = msg.data;
+		match ev.what {
+		EventTypes::None => {},
+		EventTypes::Fork => println!("{:?}", ev.fork()),
+		EventTypes::Exec => println!("{:?}", ev.exec()),
+		EventTypes::Uid  => println!("{:?}", ev.uid_change()),
+		EventTypes::Gid  => println!("{:?}", ev.gid_change()),
+		EventTypes::Comm  => println!("{:?}", ev.command()),
+		EventTypes::Exit => println!("{:?}", ev.exit()),
+		_ => println!("other"),
+		}
 		assert!(i != 0);
 		i -= 1;
 	}
