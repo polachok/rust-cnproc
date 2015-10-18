@@ -35,6 +35,21 @@ pub const PROC_EVENT_EXIT: u32 = 0x80000000;
 
 #[derive(Debug)]
 #[repr(C)]
+pub enum EventTypes {
+	None = 0,
+	Fork = 0x1,
+	Exec = 0x2,
+	Uid = 0x4,
+	Gid = 0x40,
+	Sid = 0x80,
+	Ptrace = 0x100,
+	Comm = 0x200,
+	Exit = 0x80000000
+}
+
+
+#[derive(Debug)]
+#[repr(packed)]
 pub struct cnmsg {
 	idx: u32,
 	val: u32,
@@ -45,89 +60,33 @@ pub struct cnmsg {
 }
 
 #[derive(Debug)]
-#[repr(C)]
-pub struct cnprocmsg {
+#[repr(packed)]
+pub struct cnprocmsg<T> {
 	header: cnmsg,
-	op: u32,
+	data: T,
 }
 
-impl cnprocmsg {
-	pub fn listen(&mut self) {
-		self.header.idx = CN_IDX_PROC as u32;
-		self.header.val = CN_VAL_PROC as u32;
-		self.header.seq = 0;
-		self.header.ack = 0;
-		self.header.len = 4;
-		self.header.flags = 0;
-		self.op = PROC_CN_MCAST_LISTEN as u32;
-	}
-}
-
+#[repr(packed)]
 #[derive(Debug)]
-pub struct ConnectorMsg {
-	idx: u32,
-	val: u32,
-	seq: u32,
-	ack: u32,
-	len: u16,
-	flags: u16,
-	pub data: Vec<u8>,
+pub struct proc_event {
+	what: EventTypes,
+	cpu: u32,
+	timestamp: u64,
 }
 
-impl ConnectorMsg {
-	pub fn listen() -> ConnectorMsg {
-		let op: u32 = PROC_CN_MCAST_LISTEN as u32;
-		let mut data = vec![];
-
-		data.write_u32::<LittleEndian>(op);
-
-		let cm = ConnectorMsg {
-			idx: CN_IDX_PROC as u32,
-			val: CN_VAL_PROC as u32,
-			seq: 0,
-			ack: 0,
-			len: data.len() as u16,
-			flags: 0,
-			data: data,
-		};
-		cm
-	}
-
-	pub fn from_bytes(bytes: &[u8]) -> ConnectorMsg {
-		use std::io::Cursor;
-		use std::io::Read;
-		use byteorder::{LittleEndian, ReadBytesExt};
-
-		let mut rdr = Cursor::new(bytes);
-		let mut msg = ConnectorMsg {
-			idx: rdr.read_u32::<LittleEndian>().unwrap(),
-			val: rdr.read_u32::<LittleEndian>().unwrap(),
-			seq: rdr.read_u32::<LittleEndian>().unwrap(),
-			ack: rdr.read_u32::<LittleEndian>().unwrap(),
-			len: rdr.read_u16::<LittleEndian>().unwrap(),
-			flags: rdr.read_u16::<LittleEndian>().unwrap(),
-			data: vec![] 
-		};
-		let mut data: Vec<u8> = Vec::with_capacity((msg.len) as usize);
-		rdr.read_to_end(&mut data);
-		unsafe { data.set_len((msg.len) as usize) };
-		msg.data = data;
-		msg
-	}
-
-	pub fn as_bytes(&self) -> Vec<u8> {
-		let mut vec = vec![];
-
-		vec.write_u32::<LittleEndian>(self.idx);
-		vec.write_u32::<LittleEndian>(self.val);
-		vec.write_u32::<LittleEndian>(self.seq);
-		vec.write_u32::<LittleEndian>(self.ack);
-		vec.write_u16::<LittleEndian>(self.len);
-		vec.write_u16::<LittleEndian>(self.flags);
-		for byte in self.data.iter() {
-			vec.push(*byte);
+impl cnprocmsg<u32> {
+	pub fn listen() -> Self {
+		cnprocmsg {
+			header: cnmsg {
+				idx: CN_IDX_PROC as u32,
+				val: CN_VAL_PROC as u32,
+				seq: 0,
+				ack: 0,
+				len: 4,
+				flags: 0,
+			},
+			data: PROC_CN_MCAST_LISTEN as u32,
 		}
-		vec
 	}
 }
 
