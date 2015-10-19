@@ -138,5 +138,15 @@ fn generic() {
 	let reply: &NetlinkMessage<generic::GenetlinkMessage<(generic::nlattr<[u8;12]>,generic::nlattr<[u16;3]>)>> = NetlinkMessage::from_bytes(&buf);
 	let ref family_id = reply.data.data.1.data[0];
 	println!("REPLY: {:?} FAMILY ID: {:?}", reply, family_id);
+
+	// ======================================== //
+	let msg2 = NetlinkMessage::new(taskstats::get_stats(1), *family_id as u16, ffi::NLM_F_REQUEST);
+	let data2 = msg2.as_bytes();
+	println!("SENT {:?}", sock.send(data2));
+	let mut buf2 = [0;512];
+	let len = sock.recv(&mut buf2).unwrap();
+	println!("BUF LEN {} RECEIVED", len);
+	let reply2: &NetlinkMessage<generic::GenetlinkMessage<generic::nlattr<taskstats::TaskstatsReply>>> = NetlinkMessage::from_bytes(&buf2);
+	println!("REPLY: {:?}", reply2);
 	assert!(false);
 }

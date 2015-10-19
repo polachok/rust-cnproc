@@ -51,6 +51,25 @@ pub struct GenetlinkMessage<T> {
 	pub data: T,
 }
 
+impl<T> GenetlinkMessage<T> {
+	pub fn new(cmd: u8, attr: u16, data: T) -> GenetlinkMessage<nlattr<T>> {
+		use std::mem;
+		let len = mem::size_of::<T>() as u16;
+		GenetlinkMessage {
+			header: genlmsghdr {
+				cmd: cmd,
+				version: 1,
+				reserved: 0,
+			},
+			data: nlattr {
+				nla_len: len,
+				nla_type: attr,
+				data: data,
+			},
+		}
+	}
+}
+
 impl GenetlinkMessage<[u8;12]> {
 	pub fn get_family_id(name: &str) -> GenetlinkMessage<nlattr<[u8;12]>> {
 		/* copy name into an array */
