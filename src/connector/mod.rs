@@ -65,28 +65,28 @@ pub struct proc_event {
 
 #[repr(packed)]
 #[derive(Debug)]
-pub struct Fork { parent_pid: u32, parent_tgid: u32, child_pid: u32, child_tgid: u32 }
+pub struct Fork { pub parent_pid: u32, pub parent_tgid: u32, pub child_pid: u32, pub child_tgid: u32 }
 #[repr(packed)]
 #[derive(Debug)]
-pub struct Exec { process_pid: u32, process_tgid: u32 }
+pub struct Exec { pub process_pid: u32, pub process_tgid: u32 }
 #[repr(packed)]
 #[derive(Debug)]
-pub struct UidChange { process_pid: u32, process_tgid: u32, uid: u32, euid: u32 }
+pub struct UidChange { pub process_pid: u32, pub process_tgid: u32, pub uid: u32, pub euid: u32 }
 #[repr(packed)]
 #[derive(Debug)]
-pub struct GidChange { process_pid: u32, process_tgid: u32, gid: u32, egid: u32 }
+pub struct GidChange { pub process_pid: u32, pub process_tgid: u32, pub gid: u32, pub egid: u32 }
 #[repr(packed)]
 #[derive(Debug)]
-pub struct Sid { process_pid: u32, process_tgid: u32 }
+pub struct Sid { pub process_pid: u32, pub process_tgid: u32 }
 #[repr(packed)]
 #[derive(Debug)]
-pub struct Ptrace { process_pid: u32, process_tgid: u32, tracer_pid: u32, tracer_tgid: u32 }
+pub struct Ptrace { pub process_pid: u32, pub process_tgid: u32, pub tracer_pid: u32, pub tracer_tgid: u32 }
 #[repr(packed)]
 #[derive(Debug)]
-pub struct Command { process_pid: u32, process_tgid: u32, comm: [u8;16] }
+pub struct Command { pub process_pid: u32, pub process_tgid: u32, pub comm: [u8;16] }
 #[repr(packed)]
 #[derive(Debug)]
-pub struct Exit { process_pid: u32, process_tgid: u32, exit_code: u32, exit_signal: u32 }
+pub struct Exit { pub process_pid: u32, pub process_tgid: u32, pub exit_code: u32, pub exit_signal: u32 }
 
 
 impl proc_event {
