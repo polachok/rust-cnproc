@@ -56,11 +56,11 @@ pub enum NetlinkMessageType {
 pub struct NetlinkMessage<T: Sized> {
 	header: ffi::nlmsghdr,
 	_padding: u16,
-	data: T,
+	pub data: T,
 }
 
 impl<T> NetlinkMessage<T> {
-	pub fn new(data: T, msgtype: u16, flags: u16) -> Self {
+	pub fn new(data: T, msgtype: NetlinkMessageType, flags: u16) -> Self {
 		use std::mem;
 		use std::mem::size_of;
 		use libc::getpid;
@@ -70,7 +70,7 @@ impl<T> NetlinkMessage<T> {
 		NetlinkMessage {
 			header: ffi::nlmsghdr {
 			   nlmsg_len: len as u32, //size_of::<Self> as u32,
-			   nlmsg_type: msgtype,
+			   nlmsg_type: msgtype as u16,
 			   nlmsg_flags: flags,
 			   nlmsg_seq: 0,
 			   nlmsg_pid: unsafe { getpid() } as u32,
