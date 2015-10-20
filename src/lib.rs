@@ -42,6 +42,15 @@ mod ffi {
 	}
 }
 
+#[derive(Debug)]
+#[repr(C)]
+pub enum NetlinkMessageType {
+	NoOp = ffi::NLMSG_NOOP as isize,
+	Error = ffi::NLMSG_ERROR as isize,
+	Done = ffi::NLMSG_DONE as isize,
+	Overrun = ffi::NLMSG_OVERRUN as isize,
+}
+
 #[repr(packed)]
 #[derive(Debug)]
 pub struct NetlinkMessage<T: Sized> {
