@@ -1,7 +1,7 @@
 extern crate libc;
 
 use libc::funcs::bsd43::{socket,bind,send,recvfrom};
-use std::os::unix::io::RawFd;
+use std::os::unix::io::{AsRawFd,RawFd};
 use std::io::{Error,Result};
 
 mod ffi {
@@ -48,6 +48,12 @@ pub enum NetlinkProtocol {
 #[derive(Debug)]
 pub struct NetlinkSocket {
 	fd: RawFd,
+}
+
+impl AsRawFd for NetlinkSocket {
+	fn as_raw_fd(&self) -> RawFd {
+		self.fd
+	}
 }
 
 impl NetlinkSocket {
