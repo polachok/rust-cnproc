@@ -66,7 +66,6 @@ impl<T> NetlinkMessage<T> {
 		use libc::getpid;
 
 		let len = size_of::<Self>();
-		println!("SIZEOF SELF IS {:?}", len);
 		NetlinkMessage {
 			header: ffi::nlmsghdr {
 			   nlmsg_len: len as u32, //size_of::<Self> as u32,
