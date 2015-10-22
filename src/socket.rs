@@ -1,6 +1,6 @@
 extern crate libc;
 
-use libc::funcs::bsd43::{socket,bind,send,recvfrom};
+use libc::funcs::bsd43::{socket,bind,send,recvfrom,setsockopt};
 use std::os::unix::io::{AsRawFd,RawFd};
 use std::io::{Error,Result};
 
@@ -8,6 +8,7 @@ mod ffi {
 	use libc::{c_int, sa_family_t, c_short};
 	pub const PF_NETLINK: c_int = 16;
 	pub const SOCK_DGRAM: c_int = 2;
+	pub const SOL_NETLINK: c_int = 270;
 
 	#[repr(C)]
 	#[derive(Copy,Clone)]
@@ -19,6 +20,17 @@ mod ffi {
 	}
 }
 
+#[repr(C)]
+#[derive(Debug)]
+pub enum SockOpt {
+	AddMembership = 1,
+	DropMembership = 2,
+	PktInfo = 3,
+	BroadcastError = 4,
+	NoEnobufs = 5,
+}
+
+
 /// supported protocols
 pub enum NetlinkProtocol {
 	Route = 0,
@@ -28,7 +40,7 @@ pub enum NetlinkProtocol {
 	Inet_diag = 4,
 	NFlog = 5,
 	Xfrm = 6,
-	SElinux = 7,
+	SELinux = 7,
 	ISCSI = 8,
 	Audit = 9,
 	FibLookup = 10,
@@ -84,7 +96,7 @@ impl NetlinkSocket {
 		Ok(sock)
 	}
 
-	pub fn send(&self, buf: &[u8]) -> Result<usize> {
+	pub fn send(&mut self, buf: &[u8]) -> Result<usize> {
 		use libc::c_void;
 		let len = buf.len();
 		let res = unsafe {
@@ -96,7 +108,7 @@ impl NetlinkSocket {
 		Ok(res as usize)
 	}
 
-	pub fn recv(&self, buf: &mut [u8]) -> Result<usize> {
+	pub fn recv(&mut self, buf: &mut [u8]) -> Result<usize> {
 		use libc::c_void;
 		use std::ptr::null_mut;
 		use libc::types::os::common::bsd44::sockaddr;
@@ -109,5 +121,20 @@ impl NetlinkSocket {
 			return Err(Error::last_os_error());
 		}
 		Ok(res as usize)
+	}
+
+	pub fn setsockopt(&mut self, option: SockOpt, val: bool) -> Result<()> {
+		use libc::{c_int,c_void};
+		use std::mem;
+		let ffi_val: c_int = if val { 1 } else { 0 };
+		let res = unsafe {
+			setsockopt(self.fd, ffi::SOL_NETLINK, option as c_int,
+					   mem::transmute(&ffi_val), mem::size_of::<c_int>() as u32)
+		};
+
+		if res == -1 {
+			return Err(Error::last_os_error());
+		}
+		Ok(())
 	}
 }
