@@ -4,6 +4,6 @@ version = "0.1.0"
 authors = ["Alexander Polakov <apolyakov@beget.ru>"]
 
 [dependencies]
-libc = "*"
+libc = "0.2"
 nix = "*"
 byteorder = "*"

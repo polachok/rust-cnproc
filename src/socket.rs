@@ -1,6 +1,6 @@
 extern crate libc;
 
-use libc::funcs::bsd43::{socket,bind,send,recvfrom,setsockopt};
+use libc::{socket,bind,send,recvfrom,setsockopt,getsockopt};
 use std::os::unix::io::{AsRawFd,RawFd};
 use std::io::{Error,Result};
 
@@ -100,7 +100,7 @@ impl NetlinkSocket {
 		use libc::c_void;
 		let len = buf.len();
 		let res = unsafe {
-			send(self.fd, buf.as_ptr() as *const c_void, len as u64, 0)
+			send(self.fd, buf.as_ptr() as *const c_void, len, 0)
 		};
 		if res == -1 {
 			return Err(Error::last_os_error());
@@ -111,13 +111,13 @@ impl NetlinkSocket {
 	pub fn recv(&mut self, buf: &mut [u8]) -> Result<usize> {
 		use libc::c_void;
 		use std::ptr::null_mut;
-		use libc::types::os::common::bsd44::sockaddr;
+		use libc::sockaddr;
 
-		let len = buf.len() as u64;
+		let len = buf.len();
 		let res = unsafe {
 			recvfrom(self.fd, buf.as_mut_ptr() as *mut c_void, len, 0, null_mut::<sockaddr>(), null_mut::<u32>())
 		};
-		if res < 0 as i64 {
+		if res < 0 {
 			return Err(Error::last_os_error());
 		}
 		Ok(res as usize)
@@ -137,4 +137,21 @@ impl NetlinkSocket {
 		}
 		Ok(())
 	}
+
+	pub fn getsockopt(&mut self, option: SockOpt, val: bool) -> Result<u32> {
+		use libc::{c_int,c_void};
+		use std::mem;
+		let mut ffi_val: c_int = 0;
+		let mut opt_len: c_int = 0;
+		let res = unsafe {
+			getsockopt(self.fd, ffi::SOL_NETLINK, option as c_int,
+					   mem::transmute(&mut ffi_val), mem::transmute(&mut opt_len))
+		};
+
+		if res == -1 {
+			return Err(Error::last_os_error());
+		}
+		Ok(ffi_val as u32)
+	}
+
 }
