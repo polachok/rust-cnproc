@@ -1,5 +1,6 @@
 extern crate libc;
 
+use libc::{c_int,c_void};
 use libc::{socket,bind,send,recvfrom,setsockopt,getsockopt};
 use std::os::unix::io::{AsRawFd,RawFd};
 use std::io::{Error,Result};
@@ -8,7 +9,11 @@ mod ffi {
 	use libc::{c_int, sa_family_t, c_short};
 	pub const PF_NETLINK: c_int = 16;
 	pub const SOCK_DGRAM: c_int = 2;
+
+	pub const SOL_SOCKET: c_int = 1;
 	pub const SOL_NETLINK: c_int = 270;
+
+	pub const SO_RCVBUF: c_int = 8;
 
 	#[repr(C)]
 	#[derive(Copy,Clone)]
@@ -123,28 +128,26 @@ impl NetlinkSocket {
 		Ok(res as usize)
 	}
 
-	pub fn setsockopt(&mut self, option: SockOpt, val: bool) -> Result<()> {
-		use libc::{c_int,c_void};
+	fn setsockopt_int(&mut self, level: c_int, option: c_int, val: c_int) -> Result<()> {
 		use std::mem;
-		let ffi_val: c_int = if val { 1 } else { 0 };
 		let res = unsafe {
-			setsockopt(self.fd, ffi::SOL_NETLINK, option as c_int,
-					   mem::transmute(&ffi_val), mem::size_of::<c_int>() as u32)
+			setsockopt(self.fd, level, option as c_int,
+					   mem::transmute(&val), mem::size_of::<c_int>() as u32)
 		};
 
 		if res == -1 {
 			return Err(Error::last_os_error());
 		}
 		Ok(())
+
 	}
 
-	pub fn getsockopt(&mut self, option: SockOpt, val: bool) -> Result<u32> {
-		use libc::{c_int,c_void};
+	fn getsockopt_int(&mut self, level: c_int, option: c_int) -> Result<u32> {
 		use std::mem;
 		let mut ffi_val: c_int = 0;
 		let mut opt_len: c_int = 0;
 		let res = unsafe {
-			getsockopt(self.fd, ffi::SOL_NETLINK, option as c_int,
+			getsockopt(self.fd, level, option as c_int,
 					   mem::transmute(&mut ffi_val), mem::transmute(&mut opt_len))
 		};
 
@@ -152,6 +155,24 @@ impl NetlinkSocket {
 			return Err(Error::last_os_error());
 		}
 		Ok(ffi_val as u32)
+
+	}
+
+	pub fn setsockopt(&mut self, option: SockOpt, val: bool) -> Result<()> {
+		let ffi_val: c_int = if val { 1 } else { 0 };
+		self.setsockopt_int(ffi::SOL_NETLINK, option as c_int, ffi_val)
+	}
+
+	pub fn setrcvbuf(&mut self, len: c_int) -> Result<()> {
+		self.setsockopt_int(ffi::SOL_SOCKET, ffi::SO_RCVBUF, len)
+	}
+
+	pub fn getrcvbuf(&mut self, len: c_int) -> Result<u32> {
+		self.getsockopt_int(ffi::SOL_SOCKET, ffi::SO_RCVBUF)
+	}
+
+	pub fn getsockopt(&mut self, option: SockOpt, val: bool) -> Result<u32> {
+		self.getsockopt_int(ffi::SOL_NETLINK, option as c_int)
 	}
 
 }
