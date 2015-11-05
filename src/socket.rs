@@ -167,7 +167,7 @@ impl NetlinkSocket {
 		self.setsockopt_int(ffi::SOL_SOCKET, ffi::SO_RCVBUF, len)
 	}
 
-	pub fn getrcvbuf(&mut self, len: c_int) -> Result<u32> {
+	pub fn getrcvbuf(&mut self) -> Result<u32> {
 		self.getsockopt_int(ffi::SOL_SOCKET, ffi::SO_RCVBUF)
 	}
 
