@@ -145,7 +145,7 @@ impl NetlinkSocket {
 	fn getsockopt_int(&mut self, level: c_int, option: c_int) -> Result<u32> {
 		use std::mem;
 		let mut ffi_val: c_int = 0;
-		let mut opt_len: c_int = 0;
+		let mut opt_len: c_int = mem::size_of::<c_int>();
 		let res = unsafe {
 			getsockopt(self.fd, level, option as c_int,
 					   mem::transmute(&mut ffi_val), mem::transmute(&mut opt_len))
