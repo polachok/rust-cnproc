@@ -5,5 +5,5 @@ authors = ["Alexander Polakov <apolyakov@beget.ru>"]
 
 [dependencies]
 libc = "0.2"
-nix = "*"
+nix = "0.4.2"
 byteorder = "*"
